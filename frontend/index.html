@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BioTemp - Monitoramento</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>BioTemp</h1>
+    <a href="index.html" class="ativo">Monitoramento</a>
+    <a href="equipamentos.html">Equipamentos</a>
+  </header>
+
+  <main>
+    <p>
+      <label>Refrigerador
+        <select id="equipamento"></select>
+      </label>
+    </p>
+    <p id="mensagem" class="mensagem"></p>
+
+    <div class="cartao">
+      <h2>Situação atual <span id="status" class="status"></span></h2>
+      <div class="atual">
+        <div>
+          <div class="temperatura" id="temperatura">--</div>
+          <div class="cinza" id="faixa"></div>
+        </div>
+        <div class="leitura"><span>Umidade</span><strong id="umidade">--</strong></div>
+      </div>
+      <p class="cinza">Última leitura: <span id="ultima">--</span> · atualiza a cada 10 segundos</p>
+    </div>
+
+    <div class="cartao">
+      <h2>Alertas recentes</h2>
+      <table>
+        <thead><tr><th>Data/hora</th><th>Tipo</th><th>Descrição</th></tr></thead>
+        <tbody id="tabela-alertas"></tbody>
+      </table>
+    </div>
+
+    <div class="cartao">
+      <h2>Últimas medições</h2>
+      <table>
+        <thead><tr><th>Data/hora</th><th>Temperatura</th><th>Umidade</th><th></th></tr></thead>
+        <tbody id="tabela-medicoes"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    let equipamentos = [];
+
+    function dataHora(texto) {
+      return new Date(texto).toLocaleString("pt-BR");
+    }
+
+    function numero(valor, unidade) {
+      if (valor === null) return "--";
+      return valor.toFixed(1).replace(".", ",") + " " + unidade;
+    }
+
+    async function carregarEquipamentos() {
+      const resposta = await fetch("/equipamentos");
+      equipamentos = (await resposta.json()).filter(e => e.ativo);
+
+      const select = document.getElementById("equipamento");
+      select.innerHTML = "";
+      for (const e of equipamentos) {
+        select.innerHTML += `<option value="${e.id}">${e.nome}</option>`;
+      }
+
+      if (equipamentos.length === 0) {
+        document.getElementById("mensagem").innerHTML =
+          'Nenhum refrigerador ativo. <a href="equipamentos.html">Cadastre um aqui</a>.';
+      }
+    }
+
+    async function atualizar() {
+      const id = document.getElementById("equipamento").value;
+      if (!id) return;
+      const equipamento = equipamentos.find(e => e.id == id);
+
+      const medicoes = await (await fetch(`/medicoes?equipamento_id=${id}&limite=20`)).json();
+      const alertas = await (await fetch(`/alertas?equipamento_id=${id}&limite=10`)).json();
+
+      document.getElementById("faixa").textContent =
+        `Faixa permitida: ${equipamento.temp_min} a ${equipamento.temp_max} °C`;
+      const status = document.getElementById("status");
+
+      if (medicoes.length === 0) {
+        status.textContent = "Sem medições";
+        status.className = "status inativo";
+      } else {
+        const atual = medicoes[0];
+        const fora = atual.temperatura < equipamento.temp_min ||
+                     atual.temperatura > equipamento.temp_max;
+        status.textContent = fora ? "Fora do limite" : "Normal";
+        status.className = fora ? "status fora" : "status normal";
+        document.getElementById("temperatura").textContent = numero(atual.temperatura, "°C");
+        document.getElementById("temperatura").style.color = fora ? "#b91c1c" : "";
+        document.getElementById("umidade").textContent = numero(atual.umidade, "%");
+        document.getElementById("ultima").textContent = dataHora(atual.data_hora);
+      }
+
+      let linhas = "";
+      for (const m of medicoes) {
+        const fora = m.temperatura < equipamento.temp_min || m.temperatura > equipamento.temp_max;
+        linhas += `<tr>
+          <td>${dataHora(m.data_hora)}</td>
+          <td class="${fora ? "vermelho" : ""}">${numero(m.temperatura, "°C")}</td>
+          <td>${numero(m.umidade, "%")}</td>
+          <td><button onclick="excluirMedicao(${m.id})">Excluir</button></td>
+        </tr>`;
+      }
+      document.getElementById("tabela-medicoes").innerHTML =
+        linhas || '<tr><td colspan="4">Nenhuma medição recebida ainda.</td></tr>';
+
+      linhas = "";
+      for (const a of alertas) {
+        linhas += `<tr><td>${dataHora(a.data_hora)}</td><td>${a.tipo}</td><td>${a.mensagem}</td></tr>`;
+      }
+      document.getElementById("tabela-alertas").innerHTML =
+        linhas || '<tr><td colspan="3">Nenhum alerta registrado.</td></tr>';
+    }
+
+    async function excluirMedicao(id) {
+      if (!confirm("Excluir esta medição de teste?")) return;
+      await fetch(`/medicoes/${id}`, { method: "DELETE" });
+      atualizar();
+    }
+
+    async function iniciar() {
+      try {
+        await carregarEquipamentos();
+        await atualizar();
+      } catch (erro) {
+        document.getElementById("mensagem").textContent = "Não foi possível conectar à API.";
+      }
+    }
+
+    document.getElementById("equipamento").addEventListener("change", atualizar);
+    iniciar();
+    setInterval(atualizar, 10000);
+  </script>
+</body>
+</html>

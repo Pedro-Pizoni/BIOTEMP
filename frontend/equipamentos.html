@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BioTemp - Equipamentos</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>BioTemp</h1>
+    <a href="index.html">Monitoramento</a>
+    <a href="equipamentos.html" class="ativo">Equipamentos</a>
+  </header>
+
+  <main>
+    <div class="cartao">
+      <h2 id="titulo-form">Cadastrar refrigerador</h2>
+      <form id="formulario">
+        <input type="hidden" id="id">
+        <label>Nome
+          <input id="nome" required placeholder="Geladeira de vacinas">
+        </label>
+        <label>Localização
+          <input id="localizacao" placeholder="Farmácia - sala 2">
+        </label>
+        <label>Temp. mínima (°C)
+          <input id="temp_min" type="number" step="0.1" value="2" required>
+        </label>
+        <label>Temp. máxima (°C)
+          <input id="temp_max" type="number" step="0.1" value="8" required>
+        </label>
+        <label>Situação
+          <select id="ativo">
+            <option value="true">Ativo</option>
+            <option value="false">Inativo</option>
+          </select>
+        </label>
+        <button type="submit" class="principal">Salvar</button>
+        <button type="button" onclick="limparFormulario()">Cancelar</button>
+      </form>
+      <p id="mensagem" class="mensagem"></p>
+    </div>
+
+    <div class="cartao">
+      <h2>Refrigeradores cadastrados</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Nome</th><th>Localização</th><th>Faixa permitida</th><th>Situação</th><th></th></tr></thead>
+        <tbody id="tabela"></tbody>
+      </table>
+      <p class="cinza">O ID é o número que deve ser configurado no ESP32 (equipamento_id).</p>
+    </div>
+  </main>
+
+  <script>
+    let equipamentos = [];
+
+    async function carregar() {
+      const resposta = await fetch("/equipamentos");
+      equipamentos = await resposta.json();
+
+      let linhas = "";
+      for (const e of equipamentos) {
+        linhas += `<tr>
+          <td>${e.id}</td>
+          <td>${e.nome}</td>
+          <td>${e.localizacao || ""}</td>
+          <td>${e.temp_min} a ${e.temp_max} °C</td>
+          <td><span class="status ${e.ativo ? "normal" : "inativo"}">${e.ativo ? "Ativo" : "Inativo"}</span></td>
+          <td>
+            <button onclick="editar(${e.id})">Editar</button>
+            <button onclick="alterarSituacao(${e.id})">${e.ativo ? "Desativar" : "Ativar"}</button>
+            <button class="perigo" onclick="remover(${e.id})">Remover</button>
+          </td>
+        </tr>`;
+      }
+      document.getElementById("tabela").innerHTML =
+        linhas || '<tr><td colspan="6">Nenhum refrigerador cadastrado.</td></tr>';
+    }
+
+    function editar(id) {
+      const e = equipamentos.find(item => item.id === id);
+      document.getElementById("id").value = e.id;
+      document.getElementById("nome").value = e.nome;
+      document.getElementById("localizacao").value = e.localizacao || "";
+      document.getElementById("temp_min").value = e.temp_min;
+      document.getElementById("temp_max").value = e.temp_max;
+      document.getElementById("ativo").value = String(e.ativo);
+      document.getElementById("titulo-form").textContent = "Editar refrigerador #" + e.id;
+    }
+
+    function limparFormulario() {
+      document.getElementById("formulario").reset();
+      document.getElementById("id").value = "";
+      document.getElementById("titulo-form").textContent = "Cadastrar refrigerador";
+      document.getElementById("mensagem").textContent = "";
+    }
+
+    async function alterarSituacao(id) {
+      const e = equipamentos.find(item => item.id === id);
+      await fetch(`/equipamentos/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...e, ativo: !e.ativo }),
+      });
+      carregar();
+    }
+
+    async function remover(id) {
+      const e = equipamentos.find(item => item.id === id);
+      const ok = confirm(`Remover "${e.nome}"?\n\nTodas as medições e alertas dele também serão apagados. ` +
+                         "Essa ação não pode ser desfeita.");
+      if (!ok) return;
+      await fetch(`/equipamentos/${id}`, { method: "DELETE" });
+      limparFormulario();
+      carregar();
+    }
+
+    document.getElementById("formulario").addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const id = document.getElementById("id").value;
+      const dados = {
+        nome: document.getElementById("nome").value,
+        localizacao: document.getElementById("localizacao").value || null,
+        temp_min: Number(document.getElementById("temp_min").value),
+        temp_max: Number(document.getElementById("temp_max").value),
+        ativo: document.getElementById("ativo").value === "true",
+      };
+
+      const resposta = await fetch(id ? `/equipamentos/${id}` : "/equipamentos", {
+        method: id ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dados),
+      });
+
+      if (resposta.ok) {
+        limparFormulario();
+        carregar();
+      } else {
+        const erro = await resposta.json();
+        document.getElementById("mensagem").textContent =
+          typeof erro.detail === "string" ? erro.detail : "Dados inválidos.";
+      }
+    });
+
+    carregar();
+  </script>
+</body>
+</html>

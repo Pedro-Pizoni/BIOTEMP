@@ -137,3 +137,7 @@ Enquanto continuar fora, nenhum alerta novo é criado; um novo alerta só ocorre
 
 - **Monitoramento:** temperatura e umidade atuais, situação (normal ou fora do limite), últimas medições e alertas. Atualiza a cada 10 segundos.
 - **Equipamentos:** cadastro, edição dos limites de temperatura, ativação/desativação e remoção.
+
+<img width="600" height="401" alt="WhatsApp Image 2026-11-10 at 20 57 25" src="https://github.com/user-attachments/assets/a5dc0cc4-b5fa-45b4-ab6e-609aace5a6ed" />
+<img width="669" height="300" alt="WhatsApp Image 2026-11-10 at 20 55 24" src="https://github.com/user-attachments/assets/ae089604-bf18-4c3c-8622-40eaed0591c3" />
+
